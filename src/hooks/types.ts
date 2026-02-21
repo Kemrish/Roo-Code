@@ -5,7 +5,7 @@
 /**
  * Intent status enumeration
  */
-export type IntentStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"
+export type IntentStatus = "PENDING" | "PLANNED" | "IN_PROGRESS" | "COMPLETED" | "BLOCKED"
 
 /**
  * Mutation class enumeration
@@ -54,7 +54,8 @@ export interface FileStateLock {
  * YAML structure for active_intents.yaml
  */
 export interface ActiveIntentsYaml {
-	intents: ActiveIntent[]
+	intents?: ActiveIntent[]
+	active_intents?: ActiveIntent[]
 }
 
 /**

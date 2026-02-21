@@ -1,46 +1,40 @@
-# Active Intents Configuration
-# This file defines the available intents for this workspace.
-# Each intent specifies what files/areas can be modified and what constraints apply.
+# .orchestration/active_intents.yaml
 
-intents:
-  - id: create_simple_html_file
-    title: Create Simple HTML File
-    description: Create a basic HTML file with minimal boilerplate content.
-    ownedScope: ["index.html"]
-    allowed_paths:
-      - "*.html"
-    constraints:
-      - Keep markup simple and valid HTML5
-      - Include basic document structure (doctype, html, head, body)
-    trace:
-      enabled: true
-      trace_dir: ".orch"
-      hash_algorithm: "sha256"
-      protect_manual_changes: true
+active_intents:
   - id: "INT-001"
-    name: "Architecture Documentation"
-    status: "PENDING"
-    ownedScope:
-      - "ARCHITECTURE_NOTES.md"
+    name: "JWT Authentication Migration"
+    status: "IN_PROGRESS"
+    priority: "HIGH"
+    created_at: "2026-02-16T10:00:00Z"
+    updated_at: "2026-02-16T14:30:00Z"
+    
+    owned_scope:
+      - "src/auth/**"
+      - "src/middleware/jwt.ts"
+      - "!src/auth/legacy/**"  # Exclude legacy files
+    
     constraints:
-      - "Document architectural decisions"
+      - type: "TECHNICAL"
+        rule: "Must not use external auth providers"
+      - type: "COMPATIBILITY"
+        rule: "Must maintain backward compatibility with Basic Auth"
+      - type: "PERFORMANCE"
+        rule: "Token validation must complete within 50ms"
+      - type: "SECURITY"
+        rule: "ALLOW_COMMAND:npm test"
+    
     acceptance_criteria:
-      - "ARCHITECTURE_NOTES.md is created and maintained"
-  - id: "INT-TRACE-001"
-    name: "Agent Trace Management"
-    status: "PENDING"
-    ownedScope:
-      - ".orchestration/agent_trace.jsonl"
-    constraints:
-      - "Maintain append-only history of mutating actions"
-      - "Ensure content hashing for spatial independence"
-    acceptance_criteria:
-      - "agent_trace.jsonl is created and updated with correct schema"
-  - id: create_readme_intent
-    title: Create README.md File
-    description: Allows creation and modification of the README.md file.
-    ownedScope: [README.md]
-    status: PENDING
-    acceptanceCriteria:
-      - "README.md exists and describes the concept of intents"
-
+      - "Unit tests in tests/auth/ pass with >80% coverage"
+      - "Integration tests for token refresh flow pass"
+      - "No regression in existing Basic Auth endpoints"
+    
+    dependencies:
+      - intent_id: "INT-002"  # User Management
+        type: "BLOCKS"
+      - intent_id: "INT-003"  # API Gateway
+        type: "REQUIRES"
+    
+    metadata:
+      owner: "auth-team"
+      epic: "EPIC-2026-Q1"
+      story_points: 13
