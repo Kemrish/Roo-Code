@@ -1,6 +1,6 @@
 import * as yaml from "yaml"
 import { OrchestrationStorage } from "./OrchestrationStorage"
-import type { ActiveIntent, ActiveIntentsYaml, IntentStatus } from "./types"
+import type { ActiveIntent, IntentStatus } from "./types"
 
 /**
  * IntentManager manages active intents loaded from active_intents.yaml.
@@ -35,7 +35,8 @@ export class IntentManager {
 
 		try {
 			const content = await this.storage.readFile("active_intents.yaml")
-			const parsed = yaml.parse(content) as ActiveIntentsYaml & {
+			const parsed = yaml.parse(content) as {
+				intents?: unknown[]
 				active_intents?: unknown[]
 			}
 
@@ -51,7 +52,11 @@ export class IntentManager {
 			}
 
 			// Validate and normalize intents
-			this.intentsCache = rawIntents.map((intent) => this.normalizeIntent(intent as Record<string, unknown>))
+			this.intentsCache = rawIntents.map((intent) =>
+				this.normalizeIntent(
+					typeof intent === "object" && intent !== null ? (intent as Record<string, unknown>) : {},
+				),
+			)
 
 			return this.intentsCache
 		} catch (error) {
