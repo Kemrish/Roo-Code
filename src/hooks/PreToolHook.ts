@@ -1,6 +1,7 @@
 import { IntentManager } from "./IntentManager"
 import { ScopeValidator } from "./ScopeValidator"
 import type { ToolExecutionContext, PreHookResult, ActiveIntent } from "./types"
+import { parsePatch } from "../core/tools/apply-patch"
 
 /**
  * Destructive tools that require an active intent before execution.
@@ -8,6 +9,8 @@ import type { ToolExecutionContext, PreHookResult, ActiveIntent } from "./types"
 const DESTRUCTIVE_TOOLS = new Set([
 	"write_to_file",
 	"execute_command",
+	"edit",
+	"search_and_replace",
 	"edit_file",
 	"search_replace",
 	"apply_diff",
@@ -36,6 +39,44 @@ export class PreToolHook {
 		// Prefer global instance if available (from extension.ts)
 		const globalIntentManager = (global as any).__intentManager as IntentManager | undefined
 		return globalIntentManager || this.intentManager
+	}
+
+	/**
+	 * Extracts candidate file paths from tool parameters for scope validation.
+	 * Tools without an explicit file path (e.g. execute_command) return an empty array.
+	 */
+	private extractPathsForScopeValidation(context: ToolExecutionContext): string[] {
+		switch (context.toolName) {
+			case "write_to_file":
+			case "apply_diff": {
+				const filePath = (context.toolParams.path as string) || (context.toolParams.file_path as string)
+				return filePath ? [filePath] : []
+			}
+			case "edit":
+			case "search_and_replace":
+			case "search_replace":
+			case "edit_file": {
+				const filePath = (context.toolParams.file_path as string) || (context.toolParams.path as string)
+				return filePath ? [filePath] : []
+			}
+			case "apply_patch": {
+				const patch = context.toolParams.patch as string | undefined
+				if (!patch) {
+					return []
+				}
+				const parsed = parsePatch(patch)
+				const paths: string[] = []
+				for (const hunk of parsed.hunks) {
+					paths.push(hunk.path)
+					if (hunk.type === "UpdateFile" && hunk.movePath) {
+						paths.push(hunk.movePath)
+					}
+				}
+				return paths
+			}
+			default:
+				return []
+		}
 	}
 
 	/**
@@ -85,16 +126,23 @@ export class PreToolHook {
 			}
 		}
 
-		// Validate scope for file operations
-		if (context.toolName === "write_to_file" || context.toolName === "edit_file") {
-			const filePath = (context.toolParams.path as string) || (context.toolParams.file_path as string)
-			if (filePath) {
-				const isInScope = await this.scopeValidator.validatePath(filePath, activeIntent.ownedScope)
-				if (!isInScope) {
-					return {
-						allowed: false,
-						error: `Scope Violation: Intent ${activeIntent.id} (${activeIntent.name}) is not authorized to edit ${filePath}. Allowed scope: ${activeIntent.ownedScope.join(", ")}`,
-					}
+		// Validate scope for file-mutating operations.
+		let pathsToValidate: string[] = []
+		try {
+			pathsToValidate = this.extractPathsForScopeValidation(context)
+		} catch (error) {
+			return {
+				allowed: false,
+				error: `Invalid ${context.toolName} payload for intent scope validation: ${error instanceof Error ? error.message : String(error)}`,
+			}
+		}
+
+		for (const filePath of pathsToValidate) {
+			const isInScope = await this.scopeValidator.validatePath(filePath, activeIntent.ownedScope)
+			if (!isInScope) {
+				return {
+					allowed: false,
+					error: `Scope Violation: Intent ${activeIntent.id} (${activeIntent.name}) is not authorized to edit ${filePath}. Allowed scope: ${activeIntent.ownedScope.join(", ")}`,
 				}
 			}
 		}
