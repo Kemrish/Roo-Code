@@ -22,6 +22,7 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		makeTool("write_to_file"),
 		makeTool("apply_diff"),
 		makeTool("edit"),
+		makeTool("select_active_intent"),
 	]
 
 	it("removes tools listed in settings.disabledTools", () => {
@@ -87,5 +88,27 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		const resultNames = result.map((t) => (t as any).function.name)
 		expect(resultNames).not.toContain("search_and_replace")
 		expect(resultNames).not.toContain("edit")
+	})
+
+	it("always keeps select_active_intent even if disabledTools includes it", () => {
+		const settings = {
+			disabledTools: ["select_active_intent"],
+		}
+
+		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const resultNames = result.map((t) => (t as any).function.name)
+		expect(resultNames).toContain("select_active_intent")
+	})
+
+	it("always keeps select_active_intent even if model excludes it", () => {
+		const settings = {
+			modelInfo: {
+				excludedTools: ["select_active_intent"],
+			},
+		}
+
+		const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, settings)
+		const resultNames = result.map((t) => (t as any).function.name)
+		expect(resultNames).toContain("select_active_intent")
 	})
 })
