@@ -51,6 +51,7 @@ for (const [canonical, aliases] of CANONICAL_TO_ALIASES.entries()) {
  * This avoids creating new objects via spread operators on every assistant message.
  */
 const RENAMED_TOOL_CACHE: Map<string, OpenAI.Chat.ChatCompletionTool> = new Map()
+const REQUIRED_GOVERNANCE_TOOLS = new Set<string>(["select_active_intent"])
 
 /**
  * Gets or creates a renamed tool definition with the alias name.
@@ -165,6 +166,9 @@ export function applyModelToolCustomization(
 	if (modelInfo.excludedTools && modelInfo.excludedTools.length > 0) {
 		modelInfo.excludedTools.forEach((tool) => {
 			const resolvedTool = resolveToolAlias(tool)
+			if (REQUIRED_GOVERNANCE_TOOLS.has(resolvedTool)) {
+				return
+			}
 			result.delete(resolvedTool)
 		})
 	}
@@ -297,6 +301,9 @@ export function filterNativeToolsForMode(
 			// Normalize aliases so disabling a legacy alias (e.g. "search_and_replace")
 			// also disables the canonical tool (e.g. "edit").
 			const resolvedToolName = resolveToolAlias(toolName)
+			if (REQUIRED_GOVERNANCE_TOOLS.has(resolvedToolName)) {
+				continue
+			}
 			allowedToolNames.delete(resolvedToolName)
 		}
 	}
