@@ -42,6 +42,7 @@ import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { PreToolHook } from "../../hooks/PreToolHook"
+import { HookEngine } from "../../hooks/HookEngine"
 import { IntentManager } from "../../hooks/IntentManager"
 import { OrchestrationStorage } from "../../hooks/OrchestrationStorage"
 
@@ -629,14 +630,17 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 			}
 
-			// Enforce intent governance for destructive tools.
+			// Enforce intent governance for destructive tools via the hook engine.
 			if (!block.partial) {
 				const mergedToolParams = {
 					...(block.params ?? {}),
 					...((block.nativeArgs as Record<string, unknown>) ?? {}),
 				}
+				const hookEngine = new HookEngine()
 				const preToolHook = new PreToolHook(new IntentManager(new OrchestrationStorage()))
-				const preHookResult = await preToolHook.run({
+				hookEngine.registerPreHook((context) => preToolHook.run(context))
+
+				const preHookResult = await hookEngine.executePreHooks({
 					toolName: block.name,
 					toolParams: mergedToolParams,
 					taskId: cline.taskId,

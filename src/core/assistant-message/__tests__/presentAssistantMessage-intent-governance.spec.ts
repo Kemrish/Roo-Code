@@ -17,6 +17,23 @@ vi.mock("../../../hooks/PreToolHook", () => ({
 		run = runMock
 	},
 }))
+vi.mock("../../../hooks/HookEngine", () => ({
+	HookEngine: class {
+		private hooks: Array<(context: any) => Promise<any>> = []
+		registerPreHook(hook: (context: any) => Promise<any>) {
+			this.hooks.push(hook)
+		}
+		async executePreHooks(context: any) {
+			for (const hook of this.hooks) {
+				const result = await hook(context)
+				if (!result.allowed) {
+					return result
+				}
+			}
+			return { allowed: true }
+		}
+	},
+}))
 vi.mock("../../tools/EditFileTool", () => ({
 	editFileTool: {
 		handle: editHandleMock,
