@@ -631,10 +631,14 @@ export async function presentAssistantMessage(cline: Task) {
 
 			// Enforce intent governance for destructive tools.
 			if (!block.partial) {
+				const mergedToolParams = {
+					...(block.params ?? {}),
+					...((block.nativeArgs as Record<string, unknown>) ?? {}),
+				}
 				const preToolHook = new PreToolHook(new IntentManager(new OrchestrationStorage()))
 				const preHookResult = await preToolHook.run({
 					toolName: block.name,
-					toolParams: (block.nativeArgs as Record<string, unknown>) ?? {},
+					toolParams: mergedToolParams,
 					taskId: cline.taskId,
 					workspacePath: cline.workspacePath,
 				})

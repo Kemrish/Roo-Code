@@ -126,6 +126,15 @@ export class PreToolHook {
 			}
 		}
 
+		// Command execution cannot be reliably constrained to ownedScope patterns.
+		// Fail closed to prevent bypassing intent boundaries via shell mutations.
+		if (context.toolName === "execute_command") {
+			return {
+				allowed: false,
+				error: `Scope Violation: Intent ${activeIntent.id} (${activeIntent.name}) cannot authorize execute_command because command side effects cannot be validated against ownedScope. Use file-editing tools within scope instead.`,
+			}
+		}
+
 		// Validate scope for file-mutating operations.
 		let pathsToValidate: string[] = []
 		try {

@@ -207,4 +207,24 @@ describe("PreToolHook", () => {
 		expect(result.error).toContain("Scope Violation")
 		expect(result.error).toContain("packages/types/src/ScopeValidator.ts")
 	})
+
+	it("blocks execute_command even when an intent is active", async () => {
+		const intentManager = {
+			getIntent: vi.fn().mockResolvedValue(baseIntent),
+			getActiveIntent: vi.fn().mockResolvedValue(baseIntent),
+		} as unknown as IntentManager
+
+		const hook = new PreToolHook(intentManager)
+
+		const result = await hook.run(
+			makeContext({
+				toolName: "execute_command",
+				toolParams: { command: "echo hi > README.md" },
+			}),
+		)
+
+		expect(result.allowed).toBe(false)
+		expect(result.error).toContain("execute_command")
+		expect(result.error).toContain("Scope Violation")
+	})
 })
