@@ -1,6 +1,6 @@
 import * as yaml from "yaml"
 import { OrchestrationStorage } from "./OrchestrationStorage"
-import type { ActiveIntent, ActiveIntentsYaml, IntentStatus } from "./types"
+import type { ActiveIntent, IntentStatus } from "./types"
 
 /**
  * IntentManager manages active intents loaded from active_intents.yaml.
@@ -35,24 +35,28 @@ export class IntentManager {
 
 		try {
 			const content = await this.storage.readFile("active_intents.yaml")
-			const parsed = yaml.parse(content) as ActiveIntentsYaml
+			const parsed = yaml.parse(content) as {
+				intents?: unknown[]
+				active_intents?: unknown[]
+			}
 
-			if (!parsed || !Array.isArray(parsed.intents)) {
+			const rawIntents = Array.isArray(parsed?.intents)
+				? parsed.intents
+				: Array.isArray(parsed?.active_intents)
+					? parsed.active_intents
+					: null
+
+			if (!rawIntents) {
 				this.intentsCache = []
 				return []
 			}
 
 			// Validate and normalize intents
-			this.intentsCache = parsed.intents.map((intent) => ({
-				id: intent.id,
-				name: intent.name || "",
-				description: intent.description || "",
-				status: (intent.status || "PENDING") as IntentStatus,
-				ownedScope: Array.isArray(intent.ownedScope) ? intent.ownedScope : [],
-				constraints: Array.isArray(intent.constraints) ? intent.constraints : [],
-				acceptanceCriteria: Array.isArray(intent.acceptanceCriteria) ? intent.acceptanceCriteria : [],
-				metadata: intent.metadata || {},
-			}))
+			this.intentsCache = rawIntents.map((intent) =>
+				this.normalizeIntent(
+					typeof intent === "object" && intent !== null ? (intent as Record<string, unknown>) : {},
+				),
+			)
 
 			return this.intentsCache
 		} catch (error) {
@@ -155,5 +159,74 @@ intents: []
 		} catch (error) {
 			console.warn("[IntentManager] Failed to initialize active_intents.yaml:", error)
 		}
+	}
+
+	private normalizeIntent(rawIntent: Record<string, unknown>): ActiveIntent {
+		const rawStatus = String(rawIntent.status || "PENDING").toUpperCase()
+		const status: IntentStatus = (
+			rawStatus === "PLANNED" ||
+			rawStatus === "PENDING" ||
+			rawStatus === "IN_PROGRESS" ||
+			rawStatus === "COMPLETED" ||
+			rawStatus === "BLOCKED"
+				? rawStatus
+				: "PENDING"
+		) as IntentStatus
+
+		return {
+			id: String(rawIntent.id || ""),
+			name: String(rawIntent.name || ""),
+			description: String(rawIntent.description || ""),
+			status,
+			ownedScope: this.normalizeStringArray(rawIntent.ownedScope ?? rawIntent.owned_scope),
+			constraints: this.normalizeConstraints(rawIntent.constraints),
+			acceptanceCriteria: this.normalizeStringArray(
+				rawIntent.acceptanceCriteria ?? rawIntent.acceptance_criteria,
+			),
+			metadata:
+				rawIntent.metadata && typeof rawIntent.metadata === "object"
+					? (rawIntent.metadata as Record<string, unknown>)
+					: {},
+		}
+	}
+
+	private normalizeStringArray(value: unknown): string[] {
+		if (!Array.isArray(value)) {
+			return []
+		}
+		return value
+			.map((item) => (typeof item === "string" ? item : String(item ?? "")))
+			.map((item) => item.trim())
+			.filter((item) => item.length > 0)
+	}
+
+	private normalizeConstraints(value: unknown): string[] {
+		if (!Array.isArray(value)) {
+			return []
+		}
+
+		const normalized: string[] = []
+		for (const item of value) {
+			if (typeof item === "string") {
+				const trimmed = item.trim()
+				if (trimmed) {
+					normalized.push(trimmed)
+				}
+				continue
+			}
+
+			if (item && typeof item === "object") {
+				const objectItem = item as Record<string, unknown>
+				if (typeof objectItem.rule === "string" && objectItem.rule.trim().length > 0) {
+					normalized.push(objectItem.rule.trim())
+					continue
+				}
+				const compact = JSON.stringify(objectItem)
+				if (compact) {
+					normalized.push(compact)
+				}
+			}
+		}
+		return normalized
 	}
 }

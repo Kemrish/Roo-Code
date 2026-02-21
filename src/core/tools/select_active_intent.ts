@@ -15,6 +15,19 @@ interface Intent {
 	metadata?: Record<string, any>
 }
 
+interface RawIntent {
+	id?: string
+	name?: string
+	description?: string
+	status?: string
+	ownedScope?: unknown
+	owned_scope?: unknown
+	constraints?: unknown
+	acceptanceCriteria?: unknown
+	acceptance_criteria?: unknown
+	metadata?: Record<string, any>
+}
+
 // Define the structure of the tool's response
 interface SelectActiveIntentResult {
 	success: boolean
@@ -68,22 +81,29 @@ export async function selectActiveIntent(
 
 		// 4. Read and parse the YAML file
 		const fileContent = await fs.readFile(intentsPath, "utf8")
-		const data = yaml.parse(fileContent) as { intents: Intent[] }
+		const data = yaml.parse(fileContent) as { intents?: RawIntent[]; active_intents?: RawIntent[] }
+		const rawIntents = Array.isArray(data?.intents)
+			? data.intents
+			: Array.isArray(data?.active_intents)
+				? data.active_intents
+				: null
 
-		if (!data || !data.intents) {
+		if (!rawIntents) {
 			return {
 				success: false,
 				error: "Invalid active_intents.yaml format",
-				recovery: 'File should contain an "intents:" array.',
+				recovery: 'File should contain an "intents:" or "active_intents:" array.',
 			}
 		}
 
+		const intents: Intent[] = rawIntents.map(normalizeIntent)
+
 		// 5. Find the requested intent
-		const intent = data.intents.find((i) => i.id === intentId)
+		const intent = intents.find((i) => i.id === intentId)
 
 		if (!intent) {
 			// List available intents to help the agent
-			const availableIntents = data.intents.map((i) => i.id).join(", ")
+			const availableIntents = intents.map((i) => i.id).join(", ")
 			return {
 				success: false,
 				error: `Intent ${intentId} not found`,
@@ -127,6 +147,58 @@ export async function selectActiveIntent(
 			recovery: "Please try again or check the console for details.",
 		}
 	}
+}
+
+function normalizeIntent(rawIntent: RawIntent): Intent {
+	return {
+		id: String(rawIntent.id || ""),
+		name: String(rawIntent.name || ""),
+		description: String(rawIntent.description || ""),
+		status: String(rawIntent.status || "PENDING").toUpperCase(),
+		ownedScope: normalizeStringArray(rawIntent.ownedScope ?? rawIntent.owned_scope),
+		constraints: normalizeConstraints(rawIntent.constraints),
+		acceptanceCriteria: normalizeStringArray(rawIntent.acceptanceCriteria ?? rawIntent.acceptance_criteria),
+		metadata: rawIntent.metadata || {},
+	}
+}
+
+function normalizeStringArray(value: unknown): string[] {
+	if (!Array.isArray(value)) {
+		return []
+	}
+	return value
+		.map((item) => (typeof item === "string" ? item : String(item ?? "")))
+		.map((item) => item.trim())
+		.filter((item) => item.length > 0)
+}
+
+function normalizeConstraints(value: unknown): string[] {
+	if (!Array.isArray(value)) {
+		return []
+	}
+	const normalized: string[] = []
+	for (const item of value) {
+		if (typeof item === "string") {
+			const trimmed = item.trim()
+			if (trimmed) {
+				normalized.push(trimmed)
+			}
+			continue
+		}
+
+		if (item && typeof item === "object") {
+			const objectItem = item as Record<string, unknown>
+			if (typeof objectItem.rule === "string" && objectItem.rule.trim().length > 0) {
+				normalized.push(objectItem.rule.trim())
+				continue
+			}
+			const compact = JSON.stringify(objectItem)
+			if (compact) {
+				normalized.push(compact)
+			}
+		}
+	}
+	return normalized
 }
 
 /**

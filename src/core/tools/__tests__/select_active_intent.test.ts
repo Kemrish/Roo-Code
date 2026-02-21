@@ -1,5 +1,33 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import * as path from "path"
+import * as fsPromises from "fs/promises"
+
+vi.mock("fs/promises", () => ({
+	default: {
+		access: vi.fn().mockResolvedValue(undefined),
+		readFile: vi.fn().mockResolvedValue(`intents:
+  - id: "INT-TEST"
+    name: "Intent test"
+    description: "test scope enforcement"
+    status: "IN_PROGRESS"
+    ownedScope:
+      - "src/hooks/**"
+    constraints: []
+    acceptanceCriteria: []
+`),
+	},
+	access: vi.fn().mockResolvedValue(undefined),
+	readFile: vi.fn().mockResolvedValue(`intents:
+  - id: "INT-TEST"
+    name: "Intent test"
+    description: "test scope enforcement"
+    status: "IN_PROGRESS"
+    ownedScope:
+      - "src/hooks/**"
+    constraints: []
+    acceptanceCriteria: []
+`),
+}))
 
 // Mock vscode module - must be before imports that use vscode
 vi.mock("vscode", () => {
@@ -102,5 +130,27 @@ describe("select_active_intent with INT-TEST", () => {
 		expect(result.success).toBe(false)
 		expect(result.error).toContain("Intent INT-NONEXISTENT not found")
 		expect(result.recovery).toContain("Available intents: INT-TEST")
+	})
+
+	it("should parse active_intents root with snake_case fields", async () => {
+		vi.mocked(fsPromises.readFile).mockResolvedValueOnce(`active_intents:
+  - id: "INT-SNAKE"
+    name: "Snake format"
+    status: "IN_PROGRESS"
+    owned_scope:
+      - "src/auth/**"
+    constraints:
+      - type: "TECHNICAL"
+        rule: "No external auth provider"
+    acceptance_criteria:
+      - "Auth tests pass"
+`)
+
+		const result = await selectActiveIntent("INT-SNAKE", session)
+
+		expect(result.success).toBe(true)
+		expect(result.intent?.ownedScope).toEqual(["src/auth/**"])
+		expect(result.intent?.constraints).toEqual(["No external auth provider"])
+		expect(result.intent?.acceptanceCriteria).toEqual(["Auth tests pass"])
 	})
 })
