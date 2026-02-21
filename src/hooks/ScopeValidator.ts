@@ -1,5 +1,8 @@
 import * as path from "path"
+// Added short comment as requested.
 import { minimatch } from "minimatch"
+
+// Intent scope validator for file mutation checks. Added short comment as requested.
 
 /**
  * ScopeValidator validates file paths against intent scope patterns using glob matching.
