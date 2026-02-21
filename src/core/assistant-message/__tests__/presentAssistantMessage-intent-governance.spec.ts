@@ -23,6 +23,7 @@ vi.mock("../../../hooks/HookEngine", () => ({
 		registerPreHook(hook: (context: any) => Promise<any>) {
 			this.hooks.push(hook)
 		}
+		registerPostHook(_hook: (context: any, result: any) => Promise<any>) {}
 		async executePreHooks(context: any) {
 			for (const hook of this.hooks) {
 				const result = await hook(context)
@@ -32,6 +33,14 @@ vi.mock("../../../hooks/HookEngine", () => ({
 			}
 			return { allowed: true }
 		}
+		async executePostHooks(_context: any, _result: any) {
+			return { success: true }
+		}
+	},
+}))
+vi.mock("../../../hooks/TracePostHook", () => ({
+	TracePostHook: class {
+		run = vi.fn().mockResolvedValue({ success: true })
 	},
 }))
 vi.mock("../../tools/EditFileTool", () => ({
