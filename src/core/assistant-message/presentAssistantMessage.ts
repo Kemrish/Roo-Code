@@ -45,6 +45,7 @@ import { PreToolHook } from "../../hooks/PreToolHook"
 import { HookEngine } from "../../hooks/HookEngine"
 import { IntentManager } from "../../hooks/IntentManager"
 import { OrchestrationStorage } from "../../hooks/OrchestrationStorage"
+import { TracePostHook } from "../../hooks/TracePostHook"
 
 /**
  * Processes and presents assistant message content to the user interface.
@@ -630,22 +631,35 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 			}
 
+			let hookEngine: HookEngine | undefined
+			let hookContext:
+				| { toolName: string; toolParams: Record<string, unknown>; taskId: string; workspacePath: string }
+				| undefined
+			let didExecuteTool = false
+
 			// Enforce intent governance for destructive tools via the hook engine.
 			if (!block.partial) {
 				const mergedToolParams = {
 					...(block.params ?? {}),
 					...((block.nativeArgs as Record<string, unknown>) ?? {}),
 				}
-				const hookEngine = new HookEngine()
+				hookEngine = new HookEngine()
 				const preToolHook = new PreToolHook(new IntentManager(new OrchestrationStorage()))
+				const postToolHook = new TracePostHook(
+					new IntentManager(new OrchestrationStorage()),
+					new OrchestrationStorage(),
+				)
 				hookEngine.registerPreHook((context) => preToolHook.run(context))
+				hookEngine.registerPostHook((context, result) => postToolHook.run(context, result))
 
-				const preHookResult = await hookEngine.executePreHooks({
+				hookContext = {
 					toolName: block.name,
 					toolParams: mergedToolParams,
 					taskId: cline.taskId,
 					workspacePath: cline.workspacePath,
-				})
+				}
+
+				const preHookResult = await hookEngine.executePreHooks(hookContext)
 
 				if (!preHookResult.allowed) {
 					cline.consecutiveMistakeCount++
@@ -721,6 +735,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "update_todo_list":
 					await updateTodoListTool.handle(cline, block as ToolUse<"update_todo_list">, {
@@ -728,6 +743,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "apply_diff":
 					await checkpointSaveAndMark(cline)
@@ -736,6 +752,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "edit":
 				case "search_and_replace":
@@ -745,6 +762,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "search_replace":
 					await checkpointSaveAndMark(cline)
@@ -753,6 +771,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "edit_file":
 					await checkpointSaveAndMark(cline)
@@ -761,6 +780,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "apply_patch":
 					await checkpointSaveAndMark(cline)
@@ -769,6 +789,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "read_file":
 					// Type assertion is safe here because we're in the "read_file" case
@@ -777,6 +798,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "list_files":
 					await listFilesTool.handle(cline, block as ToolUse<"list_files">, {
@@ -784,6 +806,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "codebase_search":
 					await codebaseSearchTool.handle(cline, block as ToolUse<"codebase_search">, {
@@ -791,6 +814,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "search_files":
 					await searchFilesTool.handle(cline, block as ToolUse<"search_files">, {
@@ -798,6 +822,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "execute_command":
 					await executeCommandTool.handle(cline, block as ToolUse<"execute_command">, {
@@ -805,6 +830,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "read_command_output":
 					await readCommandOutputTool.handle(cline, block as ToolUse<"read_command_output">, {
@@ -812,6 +838,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "use_mcp_tool":
 					await useMcpToolTool.handle(cline, block as ToolUse<"use_mcp_tool">, {
@@ -819,6 +846,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "access_mcp_resource":
 					await accessMcpResourceTool.handle(cline, block as ToolUse<"access_mcp_resource">, {
@@ -826,6 +854,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "select_active_intent":
 					await selectActiveIntentTool.handle(cline, block as ToolUse<"select_active_intent">, {
@@ -833,6 +862,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "ask_followup_question":
 					await askFollowupQuestionTool.handle(cline, block as ToolUse<"ask_followup_question">, {
@@ -840,6 +870,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "switch_mode":
 					await switchModeTool.handle(cline, block as ToolUse<"switch_mode">, {
@@ -847,6 +878,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "new_task":
 					await checkpointSaveAndMark(cline)
@@ -856,6 +888,7 @@ export async function presentAssistantMessage(cline: Task) {
 						pushToolResult,
 						toolCallId: block.id,
 					})
+					didExecuteTool = true
 					break
 				case "attempt_completion": {
 					const completionCallbacks: AttemptCompletionCallbacks = {
@@ -870,6 +903,7 @@ export async function presentAssistantMessage(cline: Task) {
 						block as ToolUse<"attempt_completion">,
 						completionCallbacks,
 					)
+					didExecuteTool = true
 					break
 				}
 				case "run_slash_command":
@@ -878,6 +912,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "skill":
 					await skillTool.handle(cline, block as ToolUse<"skill">, {
@@ -885,6 +920,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				case "generate_image":
 					await checkpointSaveAndMark(cline)
@@ -893,6 +929,7 @@ export async function presentAssistantMessage(cline: Task) {
 						handleError,
 						pushToolResult,
 					})
+					didExecuteTool = true
 					break
 				default: {
 					// Handle unknown/invalid tool names OR custom tools
@@ -960,6 +997,10 @@ export async function presentAssistantMessage(cline: Task) {
 					})
 					break
 				}
+			}
+
+			if (hookEngine && hookContext && didExecuteTool) {
+				await hookEngine.executePostHooks(hookContext, undefined)
 			}
 
 			break
