@@ -13,6 +13,8 @@
 
 # Roo Code
 
+<!-- Demonstrated select_active_intent with INT-TEST successfully -->
+
 > Your AI-Powered Dev Team, Right in Your Editor
 
 <details>
@@ -37,7 +39,7 @@
 - [简体中文](locales/zh-CN/README.md)
 - [繁體中文](locales/zh-TW/README.md)
 - ...
-  </details>
+    </details>
 
 ---
 

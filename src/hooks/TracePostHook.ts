@@ -32,14 +32,20 @@ export class TracePostHook {
 		this.storage = storage
 	}
 
+	private getIntentManager(): IntentManager {
+		const globalIntentManager = (global as any).__intentManager as IntentManager | undefined
+		return globalIntentManager || this.intentManager
+	}
+
 	private async getActiveIntent(context: ToolExecutionContext): Promise<ActiveIntent | null> {
+		const intentManager = this.getIntentManager()
 		if (context.activeIntentId) {
-			const intent = await this.intentManager.getIntent(context.activeIntentId)
+			const intent = await intentManager.getIntent(context.activeIntentId)
 			if (intent) {
 				return intent
 			}
 		}
-		return await this.intentManager.getActiveIntent(context.taskId)
+		return await intentManager.getActiveIntent(context.taskId)
 	}
 
 	private extractTraceTargets(context: ToolExecutionContext): TraceTarget[] {
